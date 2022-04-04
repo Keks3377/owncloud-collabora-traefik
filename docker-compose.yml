@@ -1,0 +1,92 @@
+
+version: '3'
+
+services:
+  db:
+    image: postgres:11.2
+    container_name: db
+    restart: unless-stopped
+    volumes:
+      - ./docker-volumes/db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - default
+
+# db:
+#    image: webhippie/mariadb:latest
+#    restart: always
+#    environment:
+#      - MARIADB_ROOT_PASSWORD=owncloud
+#      - MARIADB_USERNAME=owncloud
+#      - MARIADB_PASSWORD=owncloud
+#      - MARIADB_DATABASE=owncloud
+#      - MARIADB_MAX_ALLOWED_PACKET=128M
+#      - MARIADB_INNODB_LOG_FILE_SIZE=64M
+#    networks:
+#      - default
+#    volumes:
+#      - ./docker-volumes/db:/var/lib/mysql
+#    labels:
+#      - "traefik.enable=false"
+
+
+
+  owncloud:
+    image: owncloud/server:10.1.1
+    container_name: owncloud
+    restart: always
+    expose:
+      - 8080
+    depends_on:
+      - db
+    environment:
+      - OWNCLOUD_DOMAIN=${OWNCLOUD_VIRTUAL_HOST}
+      - OWNCLOUD_DB_NAME=owncloud
+      - OWNCLOUD_DB_USERNAME=${OWNCLOUD_DB_USERNAME}
+      - OWNCLOUD_DB_PASSWORD=${OWNCLOUD_DB_PASSWORD}
+      - OWNCLOUD_DB_HOST=db
+      - OWNCLOUD_ADMIN_USERNAME=${ADMIN_USERNAME}
+      - OWNCLOUD_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    volumes:
+      - ./docker-volumes/files:/mnt/data
+    networks:
+      - proxy
+      - default
+    labels:
+      traefik.enable: true
+      traefik.docker.network: owncloud-collabora-traefik_proxy
+      traefik.http.routers.owncloud.rule: Host(`${OWNCLOUD_VIRTUAL_HOST}`)
+      traefik.http.routers.owncloud.entrypoints: websecure
+      traefik.http.routers.owncloud.tls.certresolver: le
+      traefik.http.services.owncloud.loadbalancer.server.port: 8080
+
+
+
+  collabora:
+    image: collabora/code:21.11.2.4.1
+    container_name: collabora
+    restart: unless-stopped
+    expose:
+      - 9980
+    cap_add:
+      - MKNOD
+    environment:
+      domain: ${OWNCLOUD_VIRTUAL_HOST}
+      username: ${COLLABORA_USERNAME}
+      password: ${COLLABORA_PASSWORD}
+    networks:
+      - proxy
+    labels:
+      traefik.enable: true
+      traefik.docker.network: owncloud-collabora-traefik_proxy
+      traefik.http.routers.code.rule: Host(`${COLLABORA_VIRTUAL_HOST}`)
+      traefik.http.routers.code.entrypoints: websecure
+      traefik.http.routers.code.tls.certresolver: le
+      traefik.http.services.code.loadbalancer.server.port: 9980
+      traefik.http.services.code.loadbalancer.server.scheme: https
+
+networks:
+  proxy:
+  default:

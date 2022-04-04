@@ -1,0 +1,41 @@
+
+version: '3'
+
+services:
+  traefik:
+    image: traefik:2.4.2
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --log.level=INFO
+      - --api.dashboard=true
+      - --serverstransport.insecureskipverify=true
+      - --accesslog.format=common
+      - --certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker-volumes/acme.json:/acme.json
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+    labels:
+      traefik.enable: true
+      traefik.docker.network: owncloud-collabora-traefik_proxy
+      traefik.http.routers.api.service: api@internal
+      traefik.http.routers.api.entrypoints: websecure
+      traefik.http.routers.api.tls.certresolver: le
+
+networks:
+  proxy:
